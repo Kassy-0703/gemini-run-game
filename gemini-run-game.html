@@ -486,6 +486,50 @@ document.addEventListener('DOMContentLoaded', () => {
             x: TARGET_GAME_WIDTH, y: getRandomInt(GROUND_HEIGHT - 150, GROUND_HEIGHT - 80),
             width: 45, height: 45, type: type,
             draw() {
+                const centerX = this.x + this.width / 2;
+                const centerY = this.y + this.height / 2;
+
+                // Richer Glowing effect
+                ctx.save();
+                const baseGlowStrength = (Math.sin(frameCount * 0.05) + 1) / 2; // 0 to 1
+                const randomFlicker = (Math.random() * 0.2 - 0.1); // -0.1 to 0.1
+                const glowStrength = Math.max(0, Math.min(1, baseGlowStrength + randomFlicker));
+
+                let glowColorBase = '';
+                let baseRadius = this.width / 2;
+                let maxRadiusOffset = 15; // Max extra radius for glow
+
+                switch(this.type) {
+                    case 'scoreUp':
+                        glowColorBase = '255, 215, 0'; // Gold
+                        maxRadiusOffset = 12;
+                        break;
+                    case 'invincible':
+                        glowColorBase = '0, 191, 255'; // Deepskyblue
+                        maxRadiusOffset = 18;
+                        break;
+                    case 'speedUp':
+                        glowColorBase = '50, 205, 50'; // Limegreen
+                        maxRadiusOffset = 15;
+                        break;
+                    case 'jumpUp':
+                        glowColorBase = '255, 105, 180'; // Hotpink
+                        maxRadiusOffset = 15;
+                        break;
+                }
+
+                // Draw multiple concentric circles for a halo effect
+                for (let i = 0; i < 3; i++) {
+                    const currentRadius = baseRadius + (glowStrength * maxRadiusOffset * (1 - i * 0.2));
+                    const alpha = (0.4 - i * 0.1) * glowStrength; // Decreasing alpha for outer circles
+                    ctx.fillStyle = `rgba(${glowColorBase}, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Draw the item image/shape
                 let img = null;
                 switch(this.type) {
                     case 'scoreUp': img = ASSETS.itemScoreUp; break;
@@ -498,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.drawImage(img, this.x, this.y, this.width, this.height);
                 } else {
                     ctx.beginPath();
-                    ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2, 0, Math.PI * 2);
+                    ctx.arc(centerX, centerY, this.width / 2, 0, Math.PI * 2);
                     switch(this.type) {
                         case 'scoreUp': ctx.fillStyle = 'gold'; break;
                         case 'invincible': ctx.fillStyle = 'deepskyblue'; break;
@@ -507,8 +551,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     ctx.fill();
                 }
+
+                // Draw floating hearts for scoreUp item
+                if (this.type === 'scoreUp' && this.floatingHearts) {
+                    this.floatingHearts.forEach(heart => {
+                        const heartX = centerX + Math.cos(heart.angle) * heart.radius;
+                        const heartY = centerY + Math.sin(heart.angle) * heart.radius;
+
+                        ctx.drawImage(ASSETS.heart, heartX - heart.size / 2, heartY - heart.size / 2, heart.size, heart.size);
+
+                        heart.angle += heart.speed; // Update angle for next frame
+                    });
+                }
+            } // End of draw method
+        }; // End of item object definition
+
+        // Initialize floating hearts for scoreUp item (after item object is defined)
+        if (type === 'scoreUp') {
+            item.floatingHearts = [];
+            const numHearts = 3; // Number of hearts to float around
+            for (let i = 0; i < numHearts; i++) {
+                item.floatingHearts.push({
+                    angle: Math.random() * Math.PI * 2, // Initial random angle
+                    radius: getRandomInt(30, 40), // Distance from item center
+                    size: getRandomInt(15, 25), // Size of the heart image
+                    speed: (Math.random() * 0.02 + 0.01) * (Math.random() < 0.5 ? 1 : -1) // Orbit speed and direction
+                });
             }
-        };
+        }
         items.push(item);
     }
     
@@ -524,15 +594,29 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function activateItem(type, x, y) {
         switch(type) {
-            case 'scoreUp': 
-                score += 500; 
-                scoreDisplay.textContent = score; 
-                showEffectMessage('スコア +500点！', 2); 
+            case 'scoreUp':
+                score += 500;
+                scoreDisplay.textContent = score;
+                showEffectMessage('スコア +500点！', 2);
                 createScoreEffect(x, y);
                 break;
-            case 'invincible': invincibilityTimer = 300; break;
-            case 'speedUp': if (speedUpTimer <= 0) gameSpeed = baseSpeed * 1.5; speedUpTimer = 420; break;
-            case 'jumpUp': player.jumpForce = BASE_JUMP_FORCE * 1.3; jumpUpTimer = 600; break;
+            case 'invincible':
+                invincibilityTimer = 300;
+                showEffectMessage('無敵！', 2);
+                createInvincibleEffect(player.x + player.width / 2, player.y + player.height / 2);
+                break;
+            case 'speedUp':
+                if (speedUpTimer <= 0) gameSpeed = baseSpeed * 1.5;
+                speedUpTimer = 420;
+                showEffectMessage('スピードアップ！', 2);
+                createSpeedUpEffect(player.x + player.width / 2, player.y + player.height / 2);
+                break;
+            case 'jumpUp':
+                player.jumpForce = BASE_JUMP_FORCE * 1.3;
+                jumpUpTimer = 600;
+                showEffectMessage('ジャンプ力アップ！', 2);
+                createJumpUpItemEffect(player.x + player.width / 2, player.y + player.height);
+                break;
         }
     }
 
@@ -595,7 +679,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    
+    function createJumpParticles(x, y) {
+        for (let i = 0; i < 10; i++) {
+            createParticle(x, y, {
+                color: 'hotpink',
+                size: getRandomInt(5, 15),
+                life: getRandomInt(30, 50),
+                vx: (Math.random() - 0.5) * 6,
+                vy: -Math.random() * 5 - 2,
+                gravity: 0.2
+            });
+        }
+    }
+
+    // 無敵エフェクト
+    function createInvincibleEffect(x, y) {
+        visualEffects.push({
+            type: 'invincibleAura',
+            x: x, y: y,
+            radius: 0,
+            maxRadius: 50,
+            life: 60,
+            maxLife: 60,
+            color: 'rgba(0, 191, 255, 0.8)', // deepskyblue
+            image: ASSETS.itemInvincible02 // 無敵エフェクト用の画像
+        });
+    }
+
+    // スピードアップエフェクト
+    function createSpeedUpEffect(x, y) {
+        for (let i = 0; i < 20; i++) {
+            createParticle(x, y, {
+                color: 'limegreen',
+                size: getRandomInt(5, 10),
+                life: getRandomInt(20, 40),
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                gravity: 0
+            });
+        }
+    }
+
+    // ジャンプ力アップエフェクト (アイテム取得時)
+    function createJumpUpItemEffect(x, y) {
+        for (let i = 0; i < 15; i++) {
+            createParticle(x, y, {
+                color: 'hotpink',
+                size: getRandomInt(8, 18),
+                life: getRandomInt(40, 60),
+                vx: (Math.random() - 0.5) * 8,
+                vy: -Math.random() * 7 - 3,
+                gravity: 0.1
+            });
+        }
+    }
     
     // --- エフェクトの更新と描画 ---
     function updateAndDrawEffects() {
@@ -626,6 +763,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.font = `${effect.size}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.fillText(effect.text, effect.x, effect.y);
+            } else if (effect.type === 'invincibleAura') {
+                effect.radius = effect.maxRadius * (1 - effect.life / effect.maxLife);
+                const alpha = effect.life / effect.maxLife;
+                ctx.globalAlpha = alpha;
+                if (effect.image) {
+                    const imgSize = effect.radius * 2;
+                    ctx.drawImage(effect.image, effect.x - imgSize / 2, effect.y - imgSize / 2, imgSize, imgSize);
+                } else {
+                    ctx.strokeStyle = effect.color;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
             }
             ctx.globalAlpha = 1.0; // リセット
 
