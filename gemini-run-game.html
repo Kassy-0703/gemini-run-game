@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resizeCanvas() {
         const gameContainer = document.getElementById('game-container');
         const containerWidth = gameContainer.clientWidth - 32; // Adjust for padding
-        const aspectRatio = 1.5; // Adjust for more vertical space on mobile
+        const aspectRatio = 0.75; // Further adjust for more vertical space on mobile
         let newWidth = containerWidth;
         let newHeight = containerWidth / aspectRatio;
 
@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 障害物生成 ---
     function createObstacle(type, xOffset = 0) {
         const obstacle = {
-            x: canvas.width + xOffset, update: function() {},
+            x: canvas.width * 1.2 + xOffset, update: function(){},
             draw() {
                 let img = null;
                 if (type === 'low') img = ASSETS.obstacleLow;
@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createFallingObstacle() {
         const obstacle = {
-            x: getRandomInt(canvas.width, canvas.width * 1.5), y: -30, width: 37.5, height: 37.5, vy: 4,
+            x: getRandomInt(canvas.width * 1.2, canvas.width * 1.8), y: -30, width: 37.5, height: 37.5, vy: 4,
             update: function() { this.y += this.vy; },
             draw: function() {
                 if (ASSETS.fallingObstacle) {
@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createFastObstacle() {
         const obstacle = {
-            x: canvas.width, y: GROUND_HEIGHT - 45, width: 75, height: 45, vx: -4,
+            x: canvas.width * 1.2, y: GROUND_HEIGHT - 45, width: 75, height: 45, vx: -4,
             update: function() { this.x += this.vx; },
             draw: function() {
                 if (ASSETS.fastObstacle) {
@@ -397,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- アイテム関連 ---
     function createItem(type) {
         const item = {
-            x: canvas.width, y: getRandomInt(GROUND_HEIGHT - 150, GROUND_HEIGHT - 80),
+            x: canvas.width * 1.2, y: getRandomInt(GROUND_HEIGHT - 150, GROUND_HEIGHT - 80),
             width: 45, height: 45, type: type,
             draw() {
                 let img = null;
