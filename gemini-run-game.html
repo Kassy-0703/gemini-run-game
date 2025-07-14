@@ -97,8 +97,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let GROUND_HEIGHT; // 動的に設定
 
     // --- ゲーム状態変数 ---
-    let player, obstacles, items, score, baseSpeed, gameSpeed, timer, gameInterval, animationFrameId;
+    let player, obstacles, items, score, baseSpeed, gameSpeed, timer, gameInterval, animationFrameId, visualEffects, frameCount, playerHistory; // playerHistoryを追加
     let gameState = 'title';
+    let backgroundScrollX = 0, groundX = 0; // 背景・地面のスクロール位置
     let spawnCooldown = 0;
     let itemSpawnCooldown = 0;
     let invincibilityTimer = 0;
@@ -114,10 +115,15 @@ document.addEventListener('DOMContentLoaded', () => {
         fastObstacle: 'images/fast_obstacle.png',
         itemScoreUp: 'images/item_score_up.png',
         itemInvincible: 'images/item_invincible.png',
+        itemInvincible02: 'images/item_invincible_02.png', // 無敵エフェクト用
         itemSpeedUp: 'images/item_speed_up.png',
         itemJumpUp: 'images/item_jump_up.png',
         ground: 'images/ground.png',
-        background: 'images/background.png',
+        heart: 'images/heart.png', // パーティクル用のハート画像
+        background1: 'images/background_1.png',
+        background2: 'images/background_2.png',
+        background3: 'images/background_3.png',
+        background4: 'images/background_4.png',
     };
     const ASSETS = {};
     let assetsLoadedCount = 0;
@@ -177,6 +183,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.jumpsLeft > 0) {
                 this.velocityY = this.jumpForce;
                 this.jumpsLeft--;
+                // ジャンプ力アップ中にエフェクトを出す
+                if (jumpUpTimer > 0) {
+                    createJumpParticles(this.x + this.width / 2, this.y + this.height);
+                }
             }
         }
     };
@@ -220,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ゲームロジック ---
+        // --- ゲームロジック ---
     function initGame() {
         player = Object.create(playerProto);
         player.y = GROUND_HEIGHT - PLAYER_HEIGHT;
@@ -229,10 +239,15 @@ document.addEventListener('DOMContentLoaded', () => {
         player.jumpForce = BASE_JUMP_FORCE;
         
         obstacles = []; items = []; score = 0; baseSpeed = 5; gameSpeed = baseSpeed; timer = 60;
+        visualEffects = []; // エフェクト配列を初期化
+        frameCount = 0; // フレームカウントを初期化
+        playerHistory = []; // プレイヤーの移動履歴を初期化
         spawnCooldown = 120;
         itemSpawnCooldown = getRandomInt(300, 500);
 
         invincibilityTimer = 0; speedUpTimer = 0; jumpUpTimer = 0;
+        backgroundScrollX = 0; // 背景スクロール位置をリセット
+        groundX = 0; // 地面スクロール位置をリセット
         effectDisplay.textContent = '';
         effectDisplay.classList.add('opacity-0');
 
@@ -261,36 +276,96 @@ document.addEventListener('DOMContentLoaded', () => {
     function gameLoop() {
         if (gameState !== 'game') return;
 
+        frameCount++; // フレームカウントをインクリメント
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 背景を描画
-        if (ASSETS.background) {
-            ctx.drawImage(ASSETS.background, 0, 0, canvas.width, canvas.height);
-        } else {
-            // フォールバックとして背景色を塗る
-            ctx.fillStyle = '#ffffff'; // 例: 白
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // --- 連結した背景のスクロール ---
+        const bgImages = [ASSETS.background1, ASSETS.background2, ASSETS.background3, ASSETS.background4];
+        const bgScrollSpeed = 0.5; // 背景のスクロール速度
+        const widthMultiplier = 1.5; // 背景の横幅倍率
+
+        backgroundScrollX -= gameSpeed * bgScrollSpeed;
+
+        let currentX = backgroundScrollX;
+        let totalWidth = 0;
+
+        // 全背景の合計幅を計算（リサイズ後）
+        for (const img of bgImages) {
+            if (img) {
+                const scale = canvas.height / img.height;
+                totalWidth += (img.width * scale) * widthMultiplier;
+            }
         }
 
+        // 背景が一周したらリセット
+        if (backgroundScrollX <= -totalWidth) {
+            backgroundScrollX += totalWidth;
+        }
+
+        // 画面に見える範囲の背景を描画
+        for (const img of bgImages) {
+            if (img) {
+                const scale = canvas.height / img.height;
+                const scaledWidth = (img.width * scale) * widthMultiplier;
+
+                // 画面内に見える可能性のある画像を描画
+                if (currentX < canvas.width && currentX + scaledWidth > 0) {
+                    ctx.drawImage(img, currentX, 0, scaledWidth, canvas.height);
+                }
+                currentX += scaledWidth;
+            }
+        }
+        // ループ描画のために、連結した背景セットをもう一度描画
+        let loopX = backgroundScrollX + totalWidth;
+        for (const img of bgImages) {
+             if (img) {
+                const scale = canvas.height / img.height;
+                const scaledWidth = (img.width * scale) * widthMultiplier;
+                if (loopX < canvas.width && loopX + scaledWidth > 0) {
+                    ctx.drawImage(img, loopX, 0, scaledWidth, canvas.height);
+                }
+                loopX += scaledWidth;
+            }
+        }
+
+
+        // 地面のスクロールと描画
         if (ASSETS.ground) {
-            // 地面を繰り返し描画
-            const groundWidth = ASSETS.ground.width;
-            let currentX = 0;
-            while (currentX < canvas.width) {
-                ctx.drawImage(ASSETS.ground, currentX, GROUND_HEIGHT, groundWidth, canvas.height - GROUND_HEIGHT);
-                currentX += groundWidth;
+            const img = ASSETS.ground;
+            const groundDisplayHeight = canvas.height - GROUND_HEIGHT;
+            const scale = groundDisplayHeight / img.height;
+            const scaledWidth = img.width * scale;
+
+            groundX -= gameSpeed;
+            if (groundX <= -scaledWidth) {
+                groundX += scaledWidth;
+            }
+            
+            // 地面を繰り返し描画して隙間をなくす
+            for (let i = 0; (groundX + i * scaledWidth) < canvas.width; i++) {
+                 ctx.drawImage(img, groundX + i * scaledWidth, GROUND_HEIGHT, scaledWidth, groundDisplayHeight);
             }
         } else {
             ctx.fillStyle = '#333';
             ctx.fillRect(0, GROUND_HEIGHT, canvas.width, canvas.height - GROUND_HEIGHT);
         }
 
-        manageObstacleSpawning();
+        manageObstacleSpawning();""
         manageItemSpawning();
         updateItemEffects();
 
         player.update();
         player.draw();
+
+        // プレイヤーの履歴を記録
+        playerHistory.push({x: player.x, y: player.y});
+        if (playerHistory.length > 10) { // 過去10フレーム分の位置を保持
+            playerHistory.shift();
+        }
+
+        // エフェクトの更新と描画
+        updateAndDrawEffects();
 
         for (let i = obstacles.length - 1; i >= 0; i--) {
             const o = obstacles[i];
@@ -307,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.x + item.width < 0) { items.splice(i, 1); continue; }
             item.draw();
             if (isColliding(player, item)) {
-                activateItem(item.type);
+                activateItem(item.type, item.x, item.y);
                 items.splice(i, 1);
             }
         }
@@ -446,9 +521,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function activateItem(type) {
+    function activateItem(type, x, y) {
         switch(type) {
-            case 'scoreUp': score += 500; scoreDisplay.textContent = score; showEffectMessage('スコア +500点！', 2); break;
+            case 'scoreUp': 
+                score += 500; 
+                scoreDisplay.textContent = score; 
+                showEffectMessage('スコア +500点！', 2); 
+                createScoreEffect(x, y);
+                break;
             case 'invincible': invincibilityTimer = 300; break;
             case 'speedUp': if (speedUpTimer <= 0) gameSpeed = baseSpeed * 1.5; speedUpTimer = 420; break;
             case 'jumpUp': player.jumpForce = BASE_JUMP_FORCE * 1.3; jumpUpTimer = 600; break;
@@ -490,6 +570,114 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             delete effectDisplay.dataset.temp;
         }, durationInSeconds * 1000);
+    }
+
+    // --- エフェクト関連の関数 ---
+    function createParticle(x, y, options = {}) {
+        const { color = 'gold', size = 15, life = 60, vx = (Math.random() - 0.5) * 4, vy = (Math.random() - 0.5) * 4, gravity = 0.1, image = null } = options;
+        visualEffects.push({
+            type: 'particle', x, y, vx, vy, life, maxLife: life, size, color, gravity, image
+        });
+    }
+
+    function createTextEffect(x, y, text, options = {}) {
+        const { color = 'white', size = 20, life = 60, vy = -1 } = options;
+        visualEffects.push({
+            type: 'text', x, y, text, life, maxLife: life, size, color, vy
+        });
+    }
+
+    function createScoreEffect(x, y) {
+        createTextEffect(x, y, '+500', { color: 'gold', size: 24, life: 80, vy: -1.5 });
+        for (let i = 0; i < 15; i++) {
+            createParticle(x, y, { image: ASSETS.heart, size: getRandomInt(15, 25), life: getRandomInt(40, 70) });
+        }
+    }
+
+    function updateAndDrawEffects() {
+        // スピードアップ時のエフェクト（残像）
+        if (speedUpTimer > 0) {
+            // プレイヤーの履歴から残像を生成
+            playerHistory.forEach((pos, index) => {
+                const opacity = (index / playerHistory.length) * 0.5; // 古いほど薄く
+                visualEffects.push({
+                    type: 'afterimage',
+                    x: pos.x, y: pos.y, 
+                    width: player.width, height: player.height,
+                    image: ASSETS.player,
+                    life: 1, maxLife: 1, // 1フレームで描画し、次のフレームで消えるように
+                    opacity: opacity // 計算した透明度を渡す
+                });
+            });
+        }
+
+        // 無敵時のエフェクト
+        if (invincibilityTimer > 0) {
+            // オーラ
+            const auraSize = player.width * 1.2 + Math.sin(Date.now() / 100) * 5;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, auraSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0, 191, 255, ${0.3 + Math.sin(Date.now() / 100) * 0.1})`; // deepskyblue with flicker
+            ctx.fill();
+            
+            // 定期的にアイコンを生成
+            if (frameCount % 25 === 0) {
+                createParticle(player.x + player.width / 2, player.y + player.height, {
+                    image: ASSETS.itemInvincible02, // 新しいアセットを使用
+                    size: 45, // 少し大きく
+                    life: 60,
+                    vx: (Math.random() - 0.5) * 1,
+                    vy: -1.5, // 上昇
+                    gravity: -0.02 // 少しの間上昇を続ける
+                });
+            }
+        }
+
+        for (let i = visualEffects.length - 1; i >= 0; i--) {
+            const effect = visualEffects[i];
+            effect.life--;
+
+            if (effect.life <= 0) {
+                visualEffects.splice(i, 1);
+                continue;
+            }
+
+            const opacity = effect.opacity !== undefined ? effect.opacity : (effect.life / effect.maxLife); // afterimage用にopacityプロパティを優先
+
+            if (effect.type === 'particle') {
+                effect.vy += effect.gravity;
+                effect.x += effect.vx;
+                effect.y += effect.vy;
+                ctx.globalAlpha = opacity;
+                if (effect.image) {
+                    ctx.drawImage(effect.image, effect.x - effect.size / 2, effect.y - effect.size / 2, effect.size, effect.size);
+                } else {
+                    ctx.fillStyle = effect.color;
+                    ctx.fillRect(effect.x, effect.y, effect.size, effect.size);
+                }
+                ctx.globalAlpha = 1.0;
+            } else if (effect.type === 'text') {
+                effect.y += effect.vy;
+                ctx.globalAlpha = opacity;
+                ctx.fillStyle = effect.color;
+                ctx.font = `bold ${effect.size}px sans-serif`;
+                ctx.fillText(effect.text, effect.x, effect.y);
+                ctx.globalAlpha = 1.0;
+            } else if (effect.type === 'afterimage') {
+                ctx.globalAlpha = opacity; // afterimageのopacityを使用
+                ctx.drawImage(effect.image, effect.x, effect.y, effect.width, effect.height);
+                ctx.globalAlpha = 1.0;
+            } else if (effect.type === 'line') {
+                ctx.globalAlpha = opacity;
+                ctx.strokeStyle = effect.color;
+                ctx.lineWidth = player.height * (effect.life / 10);
+                ctx.beginPath();
+                ctx.moveTo(effect.x, effect.y);
+                ctx.lineTo(effect.x - effect.width, effect.y);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        }
     }
     
     // --- ランキング処理 ---
