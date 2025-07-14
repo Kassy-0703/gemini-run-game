@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resizeCanvas() {
         const gameContainer = document.getElementById('game-container');
         const containerWidth = gameContainer.clientWidth - 32; // Adjust for padding
-        const aspectRatio = 2; // 800 / 400 = 2
+        const aspectRatio = 1.5; // Adjust for more vertical space on mobile
         let newWidth = containerWidth;
         let newHeight = containerWidth / aspectRatio;
 
