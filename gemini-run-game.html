@@ -90,6 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const BASE_JUMP_FORCE = -15;
     const PLAYER_WIDTH = 60;
     const PLAYER_HEIGHT = 60;
+    const TARGET_GAME_WIDTH = 1200; // 内部的なゲームの幅を広げる
+    const TARGET_GAME_HEIGHT = 900; // 内部的なゲームの高さを広げる
     let GROUND_HEIGHT; // 動的に設定
 
     // --- ゲーム状態変数 ---
@@ -189,19 +191,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function resizeCanvas() {
         const gameContainer = document.getElementById('game-container');
         const containerWidth = gameContainer.clientWidth - 32; // Adjust for padding
-        const aspectRatio = 0.75; // Further adjust for more vertical space on mobile
-        let newWidth = containerWidth;
-        let newHeight = containerWidth / aspectRatio;
 
-        // If the calculated height exceeds the window height, adjust both
-        const maxAllowedHeight = window.innerHeight * 0.7; // Max 70% of window height
-        if (newHeight > maxAllowedHeight) {
-            newHeight = maxAllowedHeight;
-            newWidth = newHeight * aspectRatio;
+        // 内部的なキャンバスの解像度を設定
+        canvas.width = TARGET_GAME_WIDTH;
+        canvas.height = TARGET_GAME_HEIGHT;
+
+        // 表示サイズをコンテナに合わせて調整
+        const aspectRatio = TARGET_GAME_WIDTH / TARGET_GAME_HEIGHT;
+        let displayWidth = containerWidth;
+        let displayHeight = containerWidth / aspectRatio;
+
+        const maxAllowedHeight = window.innerHeight * 0.8; // 画面の80%を上限とする
+        if (displayHeight > maxAllowedHeight) {
+            displayHeight = maxAllowedHeight;
+            displayWidth = displayHeight * aspectRatio;
         }
 
-        canvas.width = newWidth;
-        canvas.height = newHeight;
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+
         GROUND_HEIGHT = canvas.height - 50;
 
         // Adjust player position if game is active
@@ -313,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 障害物生成 ---
     function createObstacle(type, xOffset = 0) {
         const obstacle = {
-            x: canvas.width * 1.2 + xOffset, update: function(){},
+            x: TARGET_GAME_WIDTH + xOffset, update: function(){},
             draw() {
                 let img = null;
                 if (type === 'low') img = ASSETS.obstacleLow;
@@ -334,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createFallingObstacle() {
         const obstacle = {
-            x: getRandomInt(canvas.width * 1.2, canvas.width * 1.8), y: -30, width: 37.5, height: 37.5, vy: 4,
+            x: getRandomInt(TARGET_GAME_WIDTH, TARGET_GAME_WIDTH * 1.5), y: -30, width: 37.5, height: 37.5, vy: 4,
             update: function() { this.y += this.vy; },
             draw: function() {
                 if (ASSETS.fallingObstacle) {
@@ -350,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createFastObstacle() {
         const obstacle = {
-            x: canvas.width * 1.2, y: GROUND_HEIGHT - 45, width: 75, height: 45, vx: -4,
+            x: TARGET_GAME_WIDTH, y: GROUND_HEIGHT - 45, width: 75, height: 45, vx: -4,
             update: function() { this.x += this.vx; },
             draw: function() {
                 if (ASSETS.fastObstacle) {
@@ -397,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- アイテム関連 ---
     function createItem(type) {
         const item = {
-            x: canvas.width * 1.2, y: getRandomInt(GROUND_HEIGHT - 150, GROUND_HEIGHT - 80),
+            x: TARGET_GAME_WIDTH, y: getRandomInt(GROUND_HEIGHT - 150, GROUND_HEIGHT - 80),
             width: 45, height: 45, type: type,
             draw() {
                 let img = null;
