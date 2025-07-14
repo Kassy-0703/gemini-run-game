@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let GROUND_HEIGHT; // 動的に設定
 
     // --- ゲーム状態変数 ---
-    let player, obstacles, items, score, baseSpeed, gameSpeed, timer, gameInterval, animationFrameId, visualEffects, frameCount, playerHistory; // playerHistoryを追加
+    let player, obstacles, items, score, baseSpeed, gameSpeed, timer, gameInterval, animationFrameId, visualEffects, frameCount, playerHistory = []; // playerHistoryを初期化
     let gameState = 'title';
     let backgroundScrollX = 0, groundX = 0; // 背景・地面のスクロール位置
     let spawnCooldown = 0;
@@ -256,6 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startGame() {
+        resizeCanvas(); // Ensure canvas dimensions and GROUND_HEIGHT are set
         initGame();
         switchScreen('game');
         gameInterval = setInterval(() => {
@@ -351,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillRect(0, GROUND_HEIGHT, canvas.width, canvas.height - GROUND_HEIGHT);
         }
 
-        manageObstacleSpawning();""
+        manageObstacleSpawning();
         manageItemSpawning();
         updateItemEffects();
 
@@ -594,89 +595,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    
+    
+    // --- エフェクトの更新と描画 ---
     function updateAndDrawEffects() {
-        // スピードアップ時のエフェクト（残像）
-        if (speedUpTimer > 0) {
-            // プレイヤーの履歴から残像を生成
-            playerHistory.forEach((pos, index) => {
-                const opacity = (index / playerHistory.length) * 0.5; // 古いほど薄く
-                visualEffects.push({
-                    type: 'afterimage',
-                    x: pos.x, y: pos.y, 
-                    width: player.width, height: player.height,
-                    image: ASSETS.player,
-                    life: 1, maxLife: 1, // 1フレームで描画し、次のフレームで消えるように
-                    opacity: opacity // 計算した透明度を渡す
-                });
-            });
-        }
-
-        // 無敵時のエフェクト
-        if (invincibilityTimer > 0) {
-            // オーラ
-            const auraSize = player.width * 1.2 + Math.sin(Date.now() / 100) * 5;
-            ctx.beginPath();
-            ctx.arc(player.x + player.width / 2, player.y + player.height / 2, auraSize / 2, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(0, 191, 255, ${0.3 + Math.sin(Date.now() / 100) * 0.1})`; // deepskyblue with flicker
-            ctx.fill();
-            
-            // 定期的にアイコンを生成
-            if (frameCount % 25 === 0) {
-                createParticle(player.x + player.width / 2, player.y + player.height, {
-                    image: ASSETS.itemInvincible02, // 新しいアセットを使用
-                    size: 45, // 少し大きく
-                    life: 60,
-                    vx: (Math.random() - 0.5) * 1,
-                    vy: -1.5, // 上昇
-                    gravity: -0.02 // 少しの間上昇を続ける
-                });
-            }
-        }
-
         for (let i = visualEffects.length - 1; i >= 0; i--) {
             const effect = visualEffects[i];
             effect.life--;
 
-            if (effect.life <= 0) {
-                visualEffects.splice(i, 1);
-                continue;
-            }
-
-            const opacity = effect.opacity !== undefined ? effect.opacity : (effect.life / effect.maxLife); // afterimage用にopacityプロパティを優先
-
             if (effect.type === 'particle') {
-                effect.vy += effect.gravity;
                 effect.x += effect.vx;
                 effect.y += effect.vy;
-                ctx.globalAlpha = opacity;
+                effect.vy += effect.gravity; // 重力の影響
+
+                const alpha = effect.life / effect.maxLife;
+                ctx.globalAlpha = alpha;
                 if (effect.image) {
-                    ctx.drawImage(effect.image, effect.x - effect.size / 2, effect.y - effect.size / 2, effect.size, effect.size);
+                    ctx.drawImage(effect.image, effect.x, effect.y, effect.size, effect.size);
                 } else {
                     ctx.fillStyle = effect.color;
-                    ctx.fillRect(effect.x, effect.y, effect.size, effect.size);
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
                 }
-                ctx.globalAlpha = 1.0;
             } else if (effect.type === 'text') {
                 effect.y += effect.vy;
-                ctx.globalAlpha = opacity;
+                const alpha = effect.life / effect.maxLife;
+                ctx.globalAlpha = alpha;
                 ctx.fillStyle = effect.color;
-                ctx.font = `bold ${effect.size}px sans-serif`;
+                ctx.font = `${effect.size}px Arial`;
+                ctx.textAlign = 'center';
                 ctx.fillText(effect.text, effect.x, effect.y);
-                ctx.globalAlpha = 1.0;
-            } else if (effect.type === 'afterimage') {
-                ctx.globalAlpha = opacity; // afterimageのopacityを使用
-                ctx.drawImage(effect.image, effect.x, effect.y, effect.width, effect.height);
-                ctx.globalAlpha = 1.0;
-            } else if (effect.type === 'line') {
-                ctx.globalAlpha = opacity;
-                ctx.strokeStyle = effect.color;
-                ctx.lineWidth = player.height * (effect.life / 10);
-                ctx.beginPath();
-                ctx.moveTo(effect.x, effect.y);
-                ctx.lineTo(effect.x - effect.width, effect.y);
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
             }
+            ctx.globalAlpha = 1.0; // リセット
+
+            if (effect.life <= 0) {
+                visualEffects.splice(i, 1);
+            }
+        }
+    }
+    
+    function createScoreEffect(x, y) {
+        createTextEffect(x, y, '+500', { color: 'gold', size: 24, life: 80, vy: -1.5 });
+        for (let i = 0; i < 15; i++) {
+            createParticle(x, y, { image: ASSETS.heart, size: getRandomInt(15, 25), life: getRandomInt(40, 70) });
+        }
+    }
+
+    function createJumpParticles(x, y) {
+        for (let i = 0; i < 10; i++) {
+            createParticle(x, y, {
+                color: 'hotpink',
+                size: getRandomInt(5, 15),
+                life: getRandomInt(30, 50),
+                vx: (Math.random() - 0.5) * 6,
+                vy: -Math.random() * 5 - 2,
+                gravity: 0.2
+            });
         }
     }
     
