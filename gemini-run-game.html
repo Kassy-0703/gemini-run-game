@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fastObstacle: 'images/fast_obstacle.png',
         itemScoreUp: 'images/item_score_up.png',
         itemInvincible: 'images/item_invincible.png',
-        itemInvincible02: 'images/item_invincible_02.png', // 無敵エフェクト用
+        itemInvincibleEffect: 'images/item_invincible_02.png', // 無敵エフェクト用
         itemSpeedUp: 'images/item_speed_up.png',
         itemJumpUp: 'images/item_jump_up.png',
         ground: 'images/ground.png',
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- プレイヤーオブジェクト ---
     const playerProto = {
-        x: 50, y: GROUND_HEIGHT - PLAYER_HEIGHT, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
+        x: 50, y: 0, width: PLAYER_WIDTH, height: PLAYER_HEIGHT,
         velocityY: 0, jumpsLeft: 2, jumpForce: BASE_JUMP_FORCE,
         draw() {
             ctx.globalAlpha = invincibilityTimer > 0 ? 0.6 : 1.0;
@@ -716,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             life: 60,
             maxLife: 60,
             color: 'rgba(0, 191, 255, 0.8)', // deepskyblue
-            image: ASSETS.itemInvincible02 // 無敵エフェクト用の画像
+            image: ASSETS.itemInvincibleEffect // 無敵エフェクト用の画像
         });
     }
 
@@ -800,41 +800,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function createScoreEffect(x, y) {
-        createTextEffect(x, y, '+500', { color: 'gold', size: 24, life: 80, vy: -1.5 });
-        for (let i = 0; i < 15; i++) {
-            createParticle(x, y, { image: ASSETS.heart, size: getRandomInt(15, 25), life: getRandomInt(40, 70) });
-        }
-    }
-
-    function createJumpParticles(x, y) {
-        for (let i = 0; i < 10; i++) {
-            createParticle(x, y, {
-                color: 'hotpink',
-                size: getRandomInt(5, 15),
-                life: getRandomInt(30, 50),
-                vx: (Math.random() - 0.5) * 6,
-                vy: -Math.random() * 5 - 2,
-                gravity: 0.2
-            });
-        }
-    }
-    
     // --- ランキング処理 ---
-    const RANKING_KEY = 'tsukubaDashRanking';
-    function getRankings() {
-        const rankingsJSON = localStorage.getItem(RANKING_KEY);
-        return rankingsJSON ? JSON.parse(rankingsJSON) : [];
+    const API_BASE_URL = 'http://localhost:3000'; // バックエンドAPIのURL
+
+    async function getRankings() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/rankings`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const rankings = await response.json();
+            return rankings;
+        } catch (error) {
+            console.error('ランキングの取得中にエラーが発生しました:', error);
+            return []; // エラー時は空の配列を返す
+        }
     }
-    function saveRanking(playerName, playerScore) {
-        const rankings = getRankings();
-        rankings.push({ name: playerName, score: playerScore });
-        rankings.sort((a, b) => b.score - a.score);
-        const top10 = rankings.slice(0, 10);
-        localStorage.setItem(RANKING_KEY, JSON.stringify(top10));
+    async function saveRanking(playerName, playerScore) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/rankings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: playerName, score: playerScore }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            console.log('ランキングがサーバーに保存されました。');
+        } catch (error) {
+            console.error('ランキングの保存中にエラーが発生しました:', error);
+            // エラーハンドリング（例: ユーザーに通知）
+        }
     }
-    function displayRankings() {
-        const rankings = getRankings();
+    async function displayRankings() {
+        const rankings = await getRankings();
         rankingList.innerHTML = '';
         if (rankings.length === 0) {
             rankingList.innerHTML = '<li>まだ誰もプレイしていません。</li>';
@@ -856,16 +857,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     screens.title.addEventListener('click', startGame);
-    rankingButton.addEventListener('click', (e) => { e.stopPropagation(); displayRankings(); switchScreen('ranking'); });
+        rankingButton.addEventListener('click', async (e) => { e.stopPropagation(); await displayRankings(); switchScreen('ranking'); });
     backToTitleButton.addEventListener('click', () => switchScreen('title'));
     backToTitleFromGameOver.addEventListener('click', () => switchScreen('title'));
-    rankingForm.addEventListener('submit', (e) => {
+        rankingForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const playerName = playerNameInput.value.trim();
         if (playerName) {
-            saveRanking(playerName, score);
+            await saveRanking(playerName, score);
             playerNameInput.value = '';
-            displayRankings();
+            await displayRankings();
             switchScreen('ranking');
         }
     });
